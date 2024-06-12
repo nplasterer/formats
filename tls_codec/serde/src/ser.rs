@@ -1,6 +1,6 @@
 use serde::{ser, Serialize};
 use tls_codec::{Serialize as _, VLByteSlice};
-
+use std::str;
 use crate::error::{Error, Result};
 
 pub struct Serializer {
@@ -134,12 +134,11 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         T: ?Sized + Serialize,
     {
         let mut tmp_serializer = Serializer { output: Vec::new() };
-        let value = T::serialize(self, &mut tmp_serializer)?;
+        value.serialize(&mut tmp_serializer)?;
         self.output
-            .extend_from_slice(&v.tls_serialize_detached().map_err(|_| Error::CodecError)?);
-        // self.serialize::<Option<T>>(Option::None)
+            .extend_from_slice(&tmp_serializer.output);
+        Ok(())
     }
-
     fn serialize_unit(self) -> Result<()> {
         Ok(())
     }
@@ -188,11 +187,12 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        self.output += "{";
-        variant.serialize(&mut *self)?;
-        self.output += ":";
-        value.serialize(&mut *self)?;
-        self.output += "}";
+        let serializer = self;
+        serializer.output.extend_from_slice(b"{");
+        serializer.serialize_str(variant)?;
+        serializer.output.extend_from_slice(b":");
+        value.serialize(&mut *serializer)?;
+        serializer.output.extend_from_slice(b"}");
         Ok(())
     }
 
@@ -207,7 +207,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     // explicitly in the serialized form. Some serializers may only be able to
     // support sequences for which the length is known up front.
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        self.output += "[";
+        self.output.extend_from_slice(b"[");
         Ok(self)
     }
 
@@ -237,15 +237,15 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
-        self.output += "{";
-        variant.serialize(&mut *self)?;
-        self.output += ":[";
+        self.output.extend_from_slice(b"{");
+        self.serialize_str(variant)?;
+        self.output.extend_from_slice(b":[");
         Ok(self)
     }
 
     // Maps are represented in JSON as `{ K: V, K: V, ... }`.
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
-        self.output += "{";
+        self.output.extend_from_slice(b"{");
         Ok(self)
     }
 
@@ -267,9 +267,9 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
-        self.output += "{";
-        variant.serialize(&mut *self)?;
-        self.output += ":{";
+        self.output.extend_from_slice(b"{");
+        self.serialize_str(variant)?;
+        self.output.extend_from_slice(b":{");
         Ok(self)
     }
 }
@@ -292,15 +292,15 @@ impl<'a> ser::SerializeSeq for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        if !self.output.ends_with('[') {
-            self.output += ",";
+        if !self.output.ends_with(b"[") {
+            self.output.extend_from_slice(b",");
         }
         value.serialize(&mut **self)
     }
 
     // Close the sequence.
     fn end(self) -> Result<()> {
-        self.output += "]";
+        self.output.extend_from_slice(b"]");
         Ok(())
     }
 }
@@ -314,14 +314,14 @@ impl<'a> ser::SerializeTuple for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        if !self.output.ends_with('[') {
-            self.output += ",";
+        if !self.output.ends_with(b"[") {
+            self.output.extend_from_slice(b",");
         }
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<()> {
-        self.output += "]";
+        self.output.extend_from_slice(b"]");
         Ok(())
     }
 }
@@ -335,14 +335,14 @@ impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        if !self.output.ends_with('[') {
-            self.output += ",";
+        if !self.output.ends_with(b"[") {
+            self.output.extend_from_slice(b",");
         }
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<()> {
-        self.output += "]";
+        self.output.extend_from_slice(b"]");
         Ok(())
     }
 }
@@ -364,14 +364,14 @@ impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        if !self.output.ends_with('[') {
-            self.output += ",";
+        if !self.output.ends_with(b"[") {
+            self.output.extend_from_slice(b",");
         }
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<()> {
-        self.output += "]}";
+        self.output.extend_from_slice(b"]}");
         Ok(())
     }
 }
@@ -400,12 +400,11 @@ impl<'a> ser::SerializeMap for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        if !self.output.ends_with('{') {
-            self.output += ",";
+        if !self.output.ends_with(b"{") {
+            self.output.extend_from_slice(b",");
         }
         key.serialize(&mut **self)
     }
-
     // It doesn't make a difference whether the colon is printed at the end of
     // `serialize_key` or at the beginning of `serialize_value`. In this case
     // the code is a bit simpler having it here.
@@ -413,12 +412,12 @@ impl<'a> ser::SerializeMap for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        self.output += ":";
+        self.output.extend_from_slice(b":");
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<()> {
-        self.output += "}";
+        self.output.extend_from_slice(b"}");
         Ok(())
     }
 }
@@ -433,16 +432,16 @@ impl<'a> ser::SerializeStruct for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        if !self.output.ends_with('{') {
-            self.output += ",";
+        if !self.output.ends_with(b"{") {
+            self.output.extend_from_slice(b",");
         }
         key.serialize(&mut **self)?;
-        self.output += ":";
+        self.output.extend_from_slice(b":");
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<()> {
-        self.output += "}";
+        self.output.extend_from_slice(b"}");
         Ok(())
     }
 }
@@ -457,16 +456,16 @@ impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
     where
         T: ?Sized + Serialize,
     {
-        if !self.output.ends_with('{') {
-            self.output += ",";
+        if !self.output.ends_with(b"{") {
+            self.output.extend_from_slice(b",");
         }
         key.serialize(&mut **self)?;
-        self.output += ":";
+        self.output.extend_from_slice(b":");
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<()> {
-        self.output += "}}";
+        self.output.extend_from_slice(b"}}");
         Ok(())
     }
 }
