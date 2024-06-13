@@ -444,60 +444,119 @@ impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#[test]
-fn test_struct() {
-    #[derive(Serialize)]
-    struct Test {
-        int: u32,
-        seq: Vec<&'static str>,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The following SomeStruct_Like_ structs are defined here to test the serialization of various
+    // OpenMLS structs. They are not used in the actual implementation but are here to have
+    // concrete types that closely resemble the shape of the actual structs.
+
+    struct TreeSyncLike {
+        // actual = tree: MlsBinaryTree<TreeSyncLeafNode, TreeSyncParentNode>,
+        tree: std::collections::BTreeMap<u32, Vec<u8>>,
+        tree_hash: Vec<u8>,
     }
 
-    let test = Test {
-        int: 1,
-        seq: vec!["a", "b"],
-    };
-    let expected = &[
-        0, 0, 0, 1, // 1u32
-        2, // vec with len 2
-        1, 0x61, // vec with len 1 and utf8 value
-        1, 0x62, // vec with len 1 and utf8 value
-    ];
-    assert_eq!(to_bytes(&test).unwrap(), expected);
-}
-
-#[test]
-fn test_enum() {
-    #[derive(Serialize)]
-    enum E {
-        Unit,
-        Newtype(u32),
-        Tuple(u32, u32),
-        Struct { a: u32 },
+    struct HashReferenceLike {
+        // actual = hash: VLBytes,
+        hash: Vec<u8>,
     }
 
-    let u = E::Unit;
-    let expected = &[0, 0, 0, 0]; // 0u32
-    assert_eq!(to_bytes(&u).unwrap(), expected);
+    enum ProposalOrRefTypeLike {
+        Proposal,
+        ProposalRef,
+    }
 
-    let n = E::Newtype(1);
-    let expected = [
-        0, 0, 0, 1, // 1u32
-        0, 0, 0, 1, // 1u32
-    ];
-    assert_eq!(to_bytes(&n).unwrap(), expected);
+    struct QueuedPropsoalLike {
+        // actual = proposal: Proposal, (enum)
+        proposal: ProposalOrRefTypeLike,
+        // actual = proposal: ProposalRef,
+        proposal_reference: HashReferenceLike,
+        // actual = sender: Sender,
+        sender: Vec<u8>,
+        // actual = proposal_or_ref_type: ProposalOrRefType, (enum)
+        proposal_or_ref_type: ProposalOrRefTypeLike,
+    }
 
-    let t = E::Tuple(1, 2);
-    let expected = [
-        0, 0, 0, 2, // 2u32
-        0, 0, 0, 1, // 1u32
-        0, 0, 0, 2, // u32
-    ];
-    assert_eq!(to_bytes(&t).unwrap(), expected);
+    struct GroupContextLike {
+        protocol_version: u8,
+        ciphersuite: Vec<u8>,
+        group_id: Vec<u8>,
+        epoch: u64,
+        tree_hash: Vec<u8>,
+        confirmed_transcript_hash: Vec<u8>,
+        // actual  = extensions: Vec<Extension>,
+        extensions: Vec<ProposalOrRefTypeLike>,
+    }
 
-    let s = E::Struct { a: 1 };
-    let expected = [
-        0, 0, 0, 3, // 3u32
-        0, 0, 0, 1, // 1u32
-    ];
-    assert_eq!(to_bytes(&s).unwrap(), expected);
+    struct InterimTranscriptHashLike {}
+    struct ConfirmationTagLike {}
+    struct SignatureKeyPairLike {}
+    struct KeyPackageLike {}
+    struct HpkeKeyPairLike {}
+    struct GroupStateLike {}
+    struct MessageSecretsLike {}
+    struct ResumptionPskStoreLike {}
+    struct LeafNodeIndexLike {}
+    struct GroupEpochSecretsLike {}
+    struct MlsGroupJoinConfigLike {}
+
+    #[test]
+    fn test_struct() {
+        #[derive(Serialize)]
+        struct Test {
+            int: u32,
+            seq: Vec<&'static str>,
+        }
+
+        let test = Test {
+            int: 1,
+            seq: vec!["a", "b"],
+        };
+        let expected = &[
+            0, 0, 0, 1, // 1u32
+            2, // vec with len 2
+            1, 0x61, // vec with len 1 and utf8 value
+            1, 0x62, // vec with len 1 and utf8 value
+        ];
+        assert_eq!(to_bytes(&test).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_enum() {
+        #[derive(Serialize)]
+        enum E {
+            Unit,
+            Newtype(u32),
+            Tuple(u32, u32),
+            Struct { a: u32 },
+        }
+
+        let u = E::Unit;
+        let expected = &[0, 0, 0, 0]; // 0u32
+        assert_eq!(to_bytes(&u).unwrap(), expected);
+
+        let n = E::Newtype(1);
+        let expected = [
+            0, 0, 0, 1, // 1u32
+            0, 0, 0, 1, // 1u32
+        ];
+        assert_eq!(to_bytes(&n).unwrap(), expected);
+
+        let t = E::Tuple(1, 2);
+        let expected = [
+            0, 0, 0, 2, // 2u32
+            0, 0, 0, 1, // 1u32
+            0, 0, 0, 2, // u32
+        ];
+        assert_eq!(to_bytes(&t).unwrap(), expected);
+
+        let s = E::Struct { a: 1 };
+        let expected = [
+            0, 0, 0, 3, // 3u32
+            0, 0, 0, 1, // 1u32
+        ];
+        assert_eq!(to_bytes(&s).unwrap(), expected);
+    }
 }
