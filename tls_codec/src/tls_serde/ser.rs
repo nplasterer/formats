@@ -490,17 +490,70 @@ mod tests {
         extensions: Vec<ProposalOrRefTypeLike>,
     }
 
-    struct InterimTranscriptHashLike {}
-    struct ConfirmationTagLike {}
-    struct SignatureKeyPairLike {}
-    struct KeyPackageLike {}
-    struct HpkeKeyPairLike {}
+    // actual = VLBytes
+    struct InterimTranscriptHashLike(Vec<u8>);
+
+    // actual = ConfimrationTag(Mac(mac_value: VLBytes))
+    struct ConfirmationTagLike(Vec<u8>);
+
+    #[repr(u16)]
+    enum SignatureSchemeLike {
+        Ed25519 = 0x0807,
+        ECDSA_SECP256R1_SHA256 = 0x0403,
+    }
+
+    struct SignatureKeyPairLike {
+        private_key: Vec<u8>,
+        public_key: Vec<u8>,
+        signature_scheme: SignatureSchemeLike,
+    }
+    struct KeyPackageLike {
+        payload: Vec<u8>,
+        // actual = signature: Signature,  Sigature { value: VLBytes }
+        signature: Vec<u8>,
+    }
+
+    struct HpkeKeyPairLike {
+        // actual = private: VLBytes,
+        private: Vec<u8>,
+        public: Vec<u8>,
+    }
+
+    // ???.  GroupState isn't a struct in openmls.
     struct GroupStateLike {}
-    struct MessageSecretsLike {}
-    struct ResumptionPskStoreLike {}
-    struct LeafNodeIndexLike {}
-    struct GroupEpochSecretsLike {}
-    struct MlsGroupJoinConfigLike {}
+
+    struct MessageSecretsLike {
+        // actual = sender_data_secret: SenderDataSecret,
+        // actual = membership_key: MembershipKey,
+        // actual = confirmation_key: ConfirmationKey,
+        // actual = serialized_context: Vec<u8>,
+        // actual =  secret_tree: SecretTree,
+    }
+
+    struct ResumptionPskStoreLike {
+        // actual =  max_number_of_secrets: usize,
+        // actual =  resumption_psk: Vec<(GroupEpoch, ResumptionPskSecret)>,
+        // actual =  cursor: usize,
+    }
+
+    struct LeafNodeIndexLike(u32);
+
+    struct GroupEpochSecretsLike {
+        // actual =  init_secret: InitSecret,
+        // actual =  exporter_secret: ExporterSecret,
+        // actual =  epoch_authenticator: EpochAuthenticator,
+        // actual =  external_secret: ExternalSecret,
+        // actual =   resumption_psk: ResumptionPskSecret,
+    }
+
+    struct MlsGroupJoinConfigLike {
+        // actual =  wire_format_policy: WireFormatPolicy,
+        // actual =  padding_size: usize,
+        // actual =  max_past_epochs: usize,
+        // actual =  number_of_resumption_psks: usize,
+        // actual =  use_ratchet_tree_extension: bool,
+        // actual =  sender_ratchet_configuration: SenderRatchetConfiguration,
+    }
 
     #[test]
     fn test_struct() {
