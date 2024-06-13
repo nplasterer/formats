@@ -644,104 +644,108 @@ impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_struct() {
-    use crate::alloc::{borrow::ToOwned, string::String, vec::Vec};
+    #[test]
+    fn test_struct() {
+        use crate::alloc::{borrow::ToOwned, string::String, vec::Vec};
 
-    #[derive(Deserialize, PartialEq, Debug)]
-    struct Test {
-        int: u32,
-        seq: Vec<String>,
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Test {
+            int: u32,
+            seq: Vec<String>,
+        }
+
+        let serialised = &[
+            0, 0, 0, 1, // 1u32
+            2, // vec with len 2
+            1, 0x61, // vec with len 1 and utf8 value
+            1, 0x62, // vec with len 1 and utf8 value
+        ];
+        let expected = Test {
+            int: 1,
+            seq: vec!["a".to_owned(), "b".to_owned()],
+        };
+
+        let deserialised = from_slice(serialised).unwrap();
+        assert_eq!(expected, deserialised);
     }
 
-    let serialised = &[
-        0, 0, 0, 1, // 1u32
-        2, // vec with len 2
-        1, 0x61, // vec with len 1 and utf8 value
-        1, 0x62, // vec with len 1 and utf8 value
-    ];
-    let expected = Test {
-        int: 1,
-        seq: vec!["a".to_owned(), "b".to_owned()],
-    };
+    #[test]
+    fn test_nested_struct() {
+        use crate::alloc::{borrow::ToOwned, string::String, vec::Vec};
 
-    let deserialised = from_slice(serialised).unwrap();
-    assert_eq!(expected, deserialised);
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Other {
+            a: u8,
+            b: u16,
+            c: u32,
+            d: u64,
+            bytes: Vec<u8>,
+        }
+
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Test {
+            int: u32,
+            other: Other,
+            seq: Vec<String>,
+        }
+
+        let serialised = &[
+            0, 0, 0, 1, // 1u32
+            // Start other
+            9, // 9u8
+            0, 8, // 8u16
+            0, 0, 0, 3, //3u32
+            0, 0, 0, 0, 0, 0, 0, 2, // 2u64
+            3, 7, 8, 9, // vec[7, 8, 9]
+            // Start seq
+            2, // vec with len 2
+            1, 0x61, // vec with len 1 and utf8 value
+            1, 0x62, // vec with len 1 and utf8 value
+        ];
+        let expected = Test {
+            int: 1,
+            seq: vec!["a".to_owned(), "b".to_owned()],
+            other: Other {
+                a: 9,
+                b: 8,
+                c: 3,
+                d: 2,
+                bytes: vec![7, 8, 9],
+            },
+        };
+
+        let deserialised = from_slice(serialised).unwrap();
+        assert_eq!(expected, deserialised);
+    }
+
+    // #[test]
+    // fn test_enum() {
+    //     #[derive(Deserialize, PartialEq, Debug)]
+    //     enum E {
+    //         Unit,
+    //         Newtype(u32),
+    //         Tuple(u32, u32),
+    //         Struct { a: u32 },
+    //     }
+
+    //     let j = r#""Unit""#;
+    //     let expected = E::Unit;
+    //     assert_eq!(expected, from_str(j).unwrap());
+
+    //     let j = r#"{"Newtype":1}"#;
+    //     let expected = E::Newtype(1);
+    //     assert_eq!(expected, from_str(j).unwrap());
+
+    //     let j = r#"{"Tuple":[1,2]}"#;
+    //     let expected = E::Tuple(1, 2);
+    //     assert_eq!(expected, from_str(j).unwrap());
+
+    //     let j = r#"{"Struct":{"a":1}}"#;
+    //     let expected = E::Struct { a: 1 };
+    //     assert_eq!(expected, from_str(j).unwrap());
+    // }
 }
-
-#[test]
-fn test_nested_struct() {
-    use crate::alloc::{borrow::ToOwned, string::String, vec::Vec};
-
-    #[derive(Deserialize, PartialEq, Debug)]
-    struct Other {
-        a: u8,
-        b: u16,
-        c: u32,
-        d: u64,
-        bytes: Vec<u8>,
-    }
-
-    #[derive(Deserialize, PartialEq, Debug)]
-    struct Test {
-        int: u32,
-        other: Other,
-        seq: Vec<String>,
-    }
-
-    let serialised = &[
-        0, 0, 0, 1, // 1u32
-        // Start other
-        9, // 9u8
-        0, 8, // 8u16
-        0, 0, 0, 3, //3u32
-        0, 0, 0, 0, 0, 0, 0, 2, // 2u64
-        3, 7, 8, 9, // vec[7, 8, 9]
-        // Start seq
-        2, // vec with len 2
-        1, 0x61, // vec with len 1 and utf8 value
-        1, 0x62, // vec with len 1 and utf8 value
-    ];
-    let expected = Test {
-        int: 1,
-        seq: vec!["a".to_owned(), "b".to_owned()],
-        other: Other {
-            a: 9,
-            b: 8,
-            c: 3,
-            d: 2,
-            bytes: vec![7, 8, 9],
-        },
-    };
-
-    let deserialised = from_slice(serialised).unwrap();
-    assert_eq!(expected, deserialised);
-}
-
-// #[test]
-// fn test_enum() {
-//     #[derive(Deserialize, PartialEq, Debug)]
-//     enum E {
-//         Unit,
-//         Newtype(u32),
-//         Tuple(u32, u32),
-//         Struct { a: u32 },
-//     }
-
-//     let j = r#""Unit""#;
-//     let expected = E::Unit;
-//     assert_eq!(expected, from_str(j).unwrap());
-
-//     let j = r#"{"Newtype":1}"#;
-//     let expected = E::Newtype(1);
-//     assert_eq!(expected, from_str(j).unwrap());
-
-//     let j = r#"{"Tuple":[1,2]}"#;
-//     let expected = E::Tuple(1, 2);
-//     assert_eq!(expected, from_str(j).unwrap());
-
-//     let j = r#"{"Struct":{"a":1}}"#;
-//     let expected = E::Struct { a: 1 };
-//     assert_eq!(expected, from_str(j).unwrap());
-// }
