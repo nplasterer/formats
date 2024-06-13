@@ -58,24 +58,25 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     type SerializeStruct = Self;
     type SerializeStructVariant = Self;
 
-    fn serialize_bool(self, _: bool) -> Result<()> {
-        Result::Err(Error::Unsupported)
+    fn serialize_bool(self, v: bool) -> Result<()> {
+        self.serialize_bytes(&[v as u8])
     }
 
     fn serialize_i8(self, v: i8) -> Result<()> {
-        unimplemented!()
+        self.serialize_bytes(&[v as u8])
     }
 
     fn serialize_i16(self, v: i16) -> Result<()> {
-        unimplemented!()
+        self.serialize_bytes(&v.to_be_bytes())
     }
 
     fn serialize_i32(self, v: i32) -> Result<()> {
-        unimplemented!()
+        self.serialize_bytes(&v.to_be_bytes())
     }
 
     fn serialize_i64(self, v: i64) -> Result<()> {
-        unimplemented!()
+        self.output.extend_from_slice(&v.to_be_bytes());
+        Ok(())
     }
 
     fn serialize_u8(self, v: u8) -> Result<()> {
@@ -95,11 +96,12 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     }
 
     fn serialize_f32(self, v: f32) -> Result<()> {
-        unimplemented!()
+        self.serialize_bytes(&v.to_be_bytes())
     }
 
     fn serialize_f64(self, v: f64) -> Result<()> {
-        unimplemented!()
+        self.output.extend_from_slice(&v.to_be_bytes());
+        Ok(())
     }
 
     fn serialize_char(self, v: char) -> Result<()> {
@@ -134,7 +136,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     }
 
     fn serialize_unit(self) -> Result<()> {
-        unimplemented!()
+        Ok(())
     }
 
     // Unit struct means a named value containing no data. Again, since there is
