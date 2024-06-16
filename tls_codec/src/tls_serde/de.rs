@@ -446,7 +446,13 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        todo!();
+        println!("name: {_name} | variants: {_variants:?}");
+        println!("self.input: {:?}", self.input);
+        let value = visitor.visit_enum(Enum::new(self))?;
+        // println!("{:#?}", value);
+
+        Ok(value)
+
         // if self.peek_char()? == '"' {
         //     // Visit a unit variant.
         //     visitor.visit_enum(self.parse_string()?.into_deserializer())
@@ -576,6 +582,7 @@ impl<'de, 'a> EnumAccess<'de> for Enum<'a, 'de> {
     where
         V: DeserializeSeed<'de>,
     {
+        println!("variant_seed: {:?}", self.de.input);
         todo!();
         // // The `deserialize_enum` method parsed a `{` character so we are
         // // currently inside of a map. The seed will be deserializing itself from
@@ -630,6 +637,7 @@ impl<'de, 'a> VariantAccess<'de> for Enum<'a, 'de> {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
 #[cfg(test)]
 mod tests {
     use super::*;
