@@ -264,8 +264,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     {
         println!("deserialise string | input: {:x?}", self.input);
         // This is a variable length encoded byte vector.
-        let v = VLBytes::tls_deserialize(&mut self.input).unwrap();
-        let s = String::from_utf8(v.into()).unwrap();
+        let v = VLBytes::tls_deserialize(&mut self.input).expect("failed to deserialize");
+        let s = String::from_utf8(v.into()).expect("failed to convert to string");
         visitor.visit_str(&s)
     }
 
@@ -356,7 +356,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
         // Sequences first have the number of elements.
         // XXX[syntax]: This only works for variable length encodings right now.
-        let (length, _read) = crate::quic_vec::rw::read_length(&mut self.input).unwrap();
+        let (length, _read) =
+            crate::quic_vec::rw::read_length(&mut self.input).expect("failed to read length");
         let value = visitor.visit_seq(SeqParser::new(self, length))?;
 
         // println!(
@@ -654,7 +655,7 @@ mod tests {
             seq: vec!["a".to_owned(), "b".to_owned()],
         };
 
-        let deserialised = from_slice(serialised).unwrap();
+        let deserialised = from_slice(serialised).expect("could not deserialize");
         assert_eq!(expected, deserialised);
     }
 
@@ -703,34 +704,68 @@ mod tests {
             },
         };
 
-        let deserialised = from_slice(serialised).unwrap();
+        let deserialised = from_slice(serialised).expect("could not deserialize");
         assert_eq!(expected, deserialised);
     }
 
-    // #[test]
-    // fn test_enum() {
-    //     #[derive(Deserialize, PartialEq, Debug)]
-    //     enum E {
-    //         Unit,
-    //         Newtype(u32),
-    //         Tuple(u32, u32),
-    //         Struct { a: u32 },
-    //     }
+    #[test]
+    fn test_enum() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Nested {
+            int: u32,
+            seq: Vec<u8>,
+        }
 
-    //     let j = r#""Unit""#;
-    //     let expected = E::Unit;
-    //     assert_eq!(expected, from_str(j).unwrap());
+        #[derive(Deserialize, PartialEq, Debug)]
+        enum E {
+            Unit,
+            Newtype(u32),
+            Tuple(u32, u32),
+            Struct { a: u32 },
+            Nested(Nested),
+        }
 
-    //     let j = r#"{"Newtype":1}"#;
-    //     let expected = E::Newtype(1);
-    //     assert_eq!(expected, from_str(j).unwrap());
+        // unit
+        let expected_e_unit = E::Unit;
+        let e_unit_serialized = [0, 0, 0, 0];
+        assert_eq!(
+            expected_e_unit,
+            from_slice(&e_unit_serialized).expect("could not deserialize")
+        );
 
-    //     let j = r#"{"Tuple":[1,2]}"#;
-    //     let expected = E::Tuple(1, 2);
-    //     assert_eq!(expected, from_str(j).unwrap());
+        // newtype
+        let expected_e_newtype = E::Newtype(42);
+        let e_newtype_serialized = [1, 0, 0, 0, 42, 0, 0, 0];
+        assert_eq!(
+            expected_e_newtype,
+            from_slice(&e_newtype_serialized).expect("could not deserialize")
+        );
 
-    //     let j = r#"{"Struct":{"a":1}}"#;
-    //     let expected = E::Struct { a: 1 };
-    //     assert_eq!(expected, from_str(j).unwrap());
-    // }
+        // tuple
+        let expected_e_tuple = E::Tuple(42, 43);
+        let e_tuple_serialized = [2, 0, 0, 0, 42, 0, 0, 0, 43, 0, 0, 0];
+        assert_eq!(
+            expected_e_tuple,
+            from_slice(&e_tuple_serialized).expect("could not deserialize")
+        );
+
+        // struct
+        let expected_e_struct = E::Struct { a: 42 };
+        let e_struct_serialized = [3, 0, 0, 0, 42, 0, 0, 0];
+        assert_eq!(
+            expected_e_struct,
+            from_slice(&e_struct_serialized).expect("could not deserialize")
+        );
+
+        // nested
+        let expected_e_nested = E::Nested(Nested {
+            int: 42,
+            seq: vec![1, 2, 3],
+        });
+        let e_nested_serialized = [4, 0, 0, 0, 42, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3];
+        assert_eq!(
+            expected_e_nested,
+            from_slice(&e_nested_serialized).expect("could not deserialize")
+        );
+    }
 }
